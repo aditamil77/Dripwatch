@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+    --font-condensed: 'IBM Plex Sans Condensed', 'Segoe UI', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --font-serif: 'Source Serif 4', Georgia, serif;
+    
+    /* Formal Industrial Engineering Palette */
+    --color-panel-bg: #0B1F3A;
+    --color-panel-border: #1E3557;
+    --color-coolant-teal: #1FA5A0;
+    --color-oil-amber: #D98200;
+    --color-alarm-red: #C0392B;
+    --color-normal-green: #2E8540;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #050b14;
+    color: #f8fafc;
+  }
+}
+
+/* Formal Typography Classes */
+.font-formal-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.font-formal-sans {
+  font-family: var(--font-sans);
+}
+
+.font-formal-condensed {
+  font-family: var(--font-condensed);
+}
+
+.font-formal-mono {
+  font-family: var(--font-mono);
+}
+
+/* Custom Scrollbar for Formal Panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #071324;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e3557;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2b4c7e;
+}

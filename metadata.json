@@ -1,0 +1,6 @@
+{
+  "name": "DripWatch: Smart Leak Detection Prototype",
+  "description": "Industrial IoT prototype demonstration for DripWatch: Multi-machine shop floor leak detection, independent edge nodes, wireless MQTT SCADA, and SLA incident management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
