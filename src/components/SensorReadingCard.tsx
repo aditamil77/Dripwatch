@@ -136,11 +136,11 @@ export const SensorReadingCard: React.FC<SensorReadingCardProps> = ({
             strokeDasharray="4,3"
           />
           <text
-            x={padLeft + chartW - 2}
-            y={thresholdY - 3}
-            textAnchor="end"
+            x={padLeft + 4}
+            y={thresholdY - 4}
+            textAnchor="start"
             fill="#eab308"
-            fontSize="8"
+            fontSize="7.5"
             fontFamily="monospace"
             fontWeight="bold"
           >
@@ -160,9 +160,9 @@ export const SensorReadingCard: React.FC<SensorReadingCardProps> = ({
           {/* Marked Point 1: Liquid reaches sensor */}
           {p1 && (
             <g>
-              <circle cx={p1.x} cy={p1.y} r="3.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="1" />
-              <text x={Math.min(p1.x, padLeft + chartW - 40)} y={Math.max(p1.y - 6, padTop + 8)} fill="#38bdf8" fontSize="7.5" fontWeight="bold" fontFamily="sans-serif">
-                1. Reached
+              <circle cx={p1.x} cy={p1.y} r="6" fill="#0ea5e9" stroke="#ffffff" strokeWidth="1" />
+              <text x={p1.x} y={p1.y + 2.5} textAnchor="middle" fill="#ffffff" fontSize="7" fontWeight="bold" fontFamily="monospace">
+                1
               </text>
             </g>
           )}
@@ -170,9 +170,9 @@ export const SensorReadingCard: React.FC<SensorReadingCardProps> = ({
           {/* Marked Point 2: Threshold crossed */}
           {p2 && (
             <g>
-              <circle cx={p2.x} cy={p2.y} r="3.5" fill="#f59e0b" stroke="#ffffff" strokeWidth="1" />
-              <text x={Math.min(p2.x, padLeft + chartW - 40)} y={Math.max(p2.y - 6, padTop + 8)} fill="#f59e0b" fontSize="7.5" fontWeight="bold" fontFamily="sans-serif">
-                2. Crossed
+              <circle cx={p2.x} cy={p2.y} r="6" fill="#f59e0b" stroke="#ffffff" strokeWidth="1" />
+              <text x={p2.x} y={p2.y + 2.5} textAnchor="middle" fill="#071324" fontSize="7" fontWeight="bold" fontFamily="monospace">
+                2
               </text>
             </g>
           )}
@@ -180,9 +180,9 @@ export const SensorReadingCard: React.FC<SensorReadingCardProps> = ({
           {/* Marked Point 3: Confirmed after 3 readings */}
           {p3 && (
             <g>
-              <circle cx={p3.x} cy={p3.y} r="4" fill="#22c55e" stroke="#ffffff" strokeWidth="1.2" />
-              <text x={Math.min(p3.x, padLeft + chartW - 55)} y={p3.y > padTop + 20 ? p3.y - 6 : p3.y + 12} fill="#4ade80" fontSize="7.5" fontWeight="bold" fontFamily="sans-serif">
-                3. Confirmed
+              <circle cx={p3.x} cy={p3.y} r="6.5" fill="#22c55e" stroke="#ffffff" strokeWidth="1.2" />
+              <text x={p3.x} y={p3.y + 2.5} textAnchor="middle" fill="#071324" fontSize="7" fontWeight="bold" fontFamily="monospace">
+                3
               </text>
             </g>
           )}

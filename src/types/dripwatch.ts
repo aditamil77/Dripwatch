@@ -6,7 +6,7 @@ export type MachineZoneId = `${MachineId}-${ZoneId}`;
 
 export type FluidType = 'coolant' | 'oil';
 
-export type LeakSpeed = 'drip' | 'seep' | 'flood';
+export type LeakSpeed = 'light_flow' | 'heavy_flow';
 
 export type RenderQuality = 'high' | 'medium' | 'low';
 
@@ -23,6 +23,16 @@ export interface MachineConfig {
   color: string;
   sensorTypes: ('electrodes' | 'ir_reflector' | 'capacitive')[];
 }
+
+export type NodePipelineStage =
+  | 'normal'
+  | 'wire_signal'
+  | 'processing'
+  | 'leak_detected'
+  | 'transmitting'
+  | 'compartment_alert';
+
+export type NodeDisplayStatus = 'NORMAL' | 'PROCESSING' | 'LEAK DETECTED';
 
 export interface ZoneTelemetry {
   machineId: MachineId;
@@ -55,6 +65,13 @@ export interface MachineNodeState {
   mqttConnected: boolean;
   buzzerActive: boolean;
   beaconStatus: 'green' | 'red_flash';
+  pipelineStage: NodePipelineStage;
+  nodeDisplayStatus: NodeDisplayStatus;
+  detectedFluid: FluidType | null;
+  activeElectrode: 'oil' | 'coolant' | null;
+  wireSignalProgress: number;       // 0..1 when wire signal is traveling to Node/CPU box
+  compartmentLinkProgress: number;  // 0..1 when processed signal travels to General Compartment Box
+  compartmentAlertActive: boolean;  // true only after signal arrives at General Compartment Box
   leds: {
     z1: 'green' | 'red' | 'amber';
     z2: 'green' | 'red' | 'amber';
@@ -86,6 +103,7 @@ export interface MachineLeakState {
   leakSpeed: LeakSpeed;
   isLeaking: boolean;
   leakStartTime: number | null;
+  contactTime: number | null;   // exact ms when puddle physically touches matching electrode
   pad1Time: number | null;
   pad3Time: number | null;
   puddles: {

@@ -16,26 +16,26 @@ export const MACHINES_CONFIG: Record<MachineId, MachineConfig> = {
     id: 'm1',
     name: 'M1 Hydraulic Press',
     type: 'Heavy Stamping Press (250 Ton)',
-    allowedFluids: ['oil'],
-    description: 'High-pressure hydraulic manifold and ram seal basin with ISO VG 46 mineral oil.',
+    allowedFluids: ['oil', 'coolant'],
+    description: 'High-pressure hydraulic manifold and ram seal basin with dual conductive electrode detection.',
     color: '#1e3a8a',
-    sensorTypes: ['ir_reflector', 'capacitive']
+    sensorTypes: ['electrodes', 'ir_reflector']
   },
   m2: {
     id: 'm2',
     name: 'M2 CNC Milling Machine',
     type: '5-Axis Vertical Machining Center',
-    allowedFluids: ['coolant'],
-    description: 'High-speed spindle and flood coolant recirculation with water-glycol emulsion.',
+    allowedFluids: ['coolant', 'oil'],
+    description: 'High-speed spindle and flood coolant recirculation with dual conductive electrode detection.',
     color: '#ea580c',
-    sensorTypes: ['electrodes']
+    sensorTypes: ['electrodes', 'ir_reflector']
   },
   m3: {
     id: 'm3',
     name: 'M3 Lathe',
     type: 'Slant-Bed CNC Turning Center',
     allowedFluids: ['coolant', 'oil'],
-    description: 'Dual-fluid chuck spindle and slideway lubing: emulsion coolant and ISO VG 68 slideway oil.',
+    description: 'Dual-fluid chuck spindle and slideway lubing with dual conductive electrode detection.',
     color: '#059669',
     sensorTypes: ['electrodes', 'ir_reflector']
   },
@@ -43,10 +43,10 @@ export const MACHINES_CONFIG: Record<MachineId, MachineConfig> = {
     id: 'm4',
     name: 'M4 Hydraulic Power Unit',
     type: 'Auxiliary HPU Station (30 kW)',
-    allowedFluids: ['oil'],
-    description: 'Continuous pump skid, hydraulic reservoir and bladder accumulator valve package.',
+    allowedFluids: ['oil', 'coolant'],
+    description: 'Continuous pump skid and valve package with dual conductive electrode detection.',
     color: '#d97706',
-    sensorTypes: ['ir_reflector', 'capacitive']
+    sensorTypes: ['electrodes', 'ir_reflector']
   }
 };
 
@@ -57,10 +57,11 @@ export const MACHINE_COORDINATES: Record<MachineId, { x: number; z: number; name
   m4: { x: 7.5, z: 5.5, name: 'M4 Hydraulic Power Unit' }
 };
 
-export const GATEWAY_COORDINATES = { x: 0, y: 5.2, z: -13.8 };
+export const GATEWAY_COORDINATES = { x: 0, y: 2.35, z: 0.75 };
 export const CONTROL_ROOM_COORDINATES = { x: 0, y: 4.5, z: 14.5 };
 
-export const PAD_DISTANCES = [0.45, 0.90, 1.35];
+export const ELECTRODE_CONTACT_RADIUS = 0.50;
+export const PAD_DISTANCES = [ELECTRODE_CONTACT_RADIUS, 0.72, 0.92];
 
 /**
  * Calculates physical puddle radius in 3D units based on fluid viscosity
@@ -70,7 +71,7 @@ export function calculatePuddleRadius(fluidType: FluidType | 'none', puddleVolum
   if (fluidType === 'coolant') {
     return Math.min(Math.sqrt(puddleVolumeMl * 0.16) * 0.85 + 0.12, 1.45);
   }
-  return Math.min(Math.sqrt(puddleVolumeMl * 0.085) * 0.75 + 0.08, 1.35);
+  return Math.min(Math.sqrt(puddleVolumeMl * 0.12) * 0.78 + 0.09, 1.35);
 }
 
 /**
@@ -97,7 +98,8 @@ export function calculateIrReflectance(fluidType: FluidType | 'none', puddleVolu
 }
 
 /**
- * Pure evaluation of a single zone's sensors for a machine
+ * Pure evaluation of a single zone's sensors for a machine.
+ * Physical electrode contact occurs only when spreading fluid reaches ELECTRODE_CONTACT_RADIUS.
  */
 export function evaluateZone(
   machineId: MachineId,
@@ -120,14 +122,13 @@ export function evaluateZone(
     isThisZoneLeaking && puddleRadius >= PAD_DISTANCES[2]
   ];
 
-  // Sensor geometry location relative to zone center is ~0.56 units away
-  const sensorReached = isThisZoneLeaking && puddleRadius >= 0.52;
-  const electrodesTriggered = activeFluid === 'coolant' && (sensorReached || puddleVolumeMl >= 1.6);
-  const irSensorTriggered = activeFluid === 'oil' && (sensorReached || puddleVolumeMl >= 1.4);
-  const hasAlert = electrodesTriggered || irSensorTriggered || padsGlow[0];
+  // Physical fluid contact with the dedicated Oil or Coolant electrode rod inside collection tray
+  const sensorReached = isThisZoneLeaking && puddleRadius >= ELECTRODE_CONTACT_RADIUS;
+  const electrodesTriggered = activeFluid === 'coolant' && sensorReached;
+  const irSensorTriggered = activeFluid === 'oil' && sensorReached;
+  const hasAlert = electrodesTriggered || irSensorTriggered;
 
-  const machineCfg = MACHINES_CONFIG[machineId];
-  const isElectrodes = machineCfg.sensorTypes.includes('electrodes') && activeFluid !== 'oil';
+  const isElectrodes = fluidType === 'coolant';
   const sensorSignalType: 'electrodes' | 'ir_reflector' = isElectrodes ? 'electrodes' : 'ir_reflector';
   const sensorThreshold = isElectrodes ? 500 : 35;
   const signalUnit = isElectrodes ? 'µS/cm' : '%';
@@ -139,35 +140,33 @@ export function evaluateZone(
   let confirmedTime: number | null = null;
   let detectionTimeSeconds: number | null = null;
 
-  if (isThisZoneLeaking && leakStartTime) {
-    const elapsed = Math.max((Date.now() - leakStartTime) / 1000, 0.1);
-    if (sensorReached || hasAlert) {
-      liquidReachedTime = Math.min(Number((elapsed * 0.65).toFixed(1)), 1.2);
-      thresholdCrossedTime = Number((liquidReachedTime + 0.3).toFixed(1));
-      confirmedTime = Number((thresholdCrossedTime + 0.3).toFixed(1));
-      detectionTimeSeconds = confirmedTime;
-    }
+  if (isThisZoneLeaking && leakStartTime && hasAlert) {
+    const elapsed = Math.max((Date.now() - leakStartTime) / 1000, 0.4);
+    liquidReachedTime = Number((Math.min(elapsed * 0.72, 2.8)).toFixed(1));
+    thresholdCrossedTime = Number((liquidReachedTime + 0.4).toFixed(1));
+    confirmedTime = Number((thresholdCrossedTime + 0.8).toFixed(1));
+    detectionTimeSeconds = confirmedTime;
   }
 
   // Generate illustrative signal curve for the live line chart
   const signalHistory: { time: number; value: number }[] = [];
-  const maxT = liquidReachedTime ? Math.max(3.5, liquidReachedTime + 1.5) : 3.5;
+  const maxT = liquidReachedTime ? Math.max(4.5, liquidReachedTime + 1.8) : 4.5;
   const steps = 14;
   for (let i = 0; i <= steps; i++) {
     const t = Number(((i / steps) * maxT).toFixed(1));
     if (isElectrodes) {
       if (!liquidReachedTime || t < liquidReachedTime) {
         signalHistory.push({ time: t, value: 2.2 + Math.sin(t * 3) * 0.8 });
-      } else if (t < (thresholdCrossedTime || liquidReachedTime + 0.3)) {
-        signalHistory.push({ time: t, value: 360 + Math.random() * 40 });
+      } else if (t < (thresholdCrossedTime || liquidReachedTime + 0.4)) {
+        signalHistory.push({ time: t, value: 380 });
       } else {
         signalHistory.push({ time: t, value: 720 + Math.sin(t * 2) * 25 });
       }
     } else {
       if (!liquidReachedTime || t < liquidReachedTime) {
         signalHistory.push({ time: t, value: 98.2 - Math.sin(t * 2) * 0.6 });
-      } else if (t < (thresholdCrossedTime || liquidReachedTime + 0.3)) {
-        signalHistory.push({ time: t, value: 48 - Math.random() * 6 });
+      } else if (t < (thresholdCrossedTime || liquidReachedTime + 0.4)) {
+        signalHistory.push({ time: t, value: 44 });
       } else {
         signalHistory.push({ time: t, value: 21.5 + Math.sin(t * 2) * 1.5 });
       }
@@ -200,13 +199,137 @@ export function evaluateZone(
   };
 }
 
+export const PIPELINE_TIMINGS = {
+  WIRE_DURATION_S: 1.0,
+  PROCESSING_DURATION_S: 1.2,
+  NODE_DETECTED_PAUSE_S: 0.3,
+  COMPARTMENT_TX_DURATION_S: 1.4,
+};
+
 /**
- * Derives independent ESP32 node state for a specific machine
+ * Pure deterministic evaluation of the physical detection -> wire -> Node/CPU -> General Compartment pipeline
+ */
+export function evaluateNodePipeline(
+  activeElectrode: 'oil' | 'coolant' | null,
+  contactTime: number | null | undefined,
+  nowMs: number = Date.now(),
+  timingScale: number = 1
+): Pick<
+  MachineNodeState,
+  | 'pipelineStage'
+  | 'nodeDisplayStatus'
+  | 'detectedFluid'
+  | 'activeElectrode'
+  | 'wireSignalProgress'
+  | 'compartmentLinkProgress'
+  | 'compartmentAlertActive'
+> {
+  if (!activeElectrode || contactTime === null) {
+    return {
+      pipelineStage: 'normal',
+      nodeDisplayStatus: 'NORMAL',
+      detectedFluid: null,
+      activeElectrode: null,
+      wireSignalProgress: 0,
+      compartmentLinkProgress: 0,
+      compartmentAlertActive: false,
+    };
+  }
+
+  // If contactTime is explicitly omitted (legacy call), treat as fully settled alert
+  if (contactTime === undefined) {
+    return {
+      pipelineStage: 'compartment_alert',
+      nodeDisplayStatus: 'LEAK DETECTED',
+      detectedFluid: activeElectrode,
+      activeElectrode,
+      wireSignalProgress: 1,
+      compartmentLinkProgress: 1,
+      compartmentAlertActive: true,
+    };
+  }
+
+  const scale = Math.max(timingScale, 0.2);
+  const elapsed = Math.max(0, (nowMs - contactTime) / 1000);
+  const wireDur = PIPELINE_TIMINGS.WIRE_DURATION_S * scale;
+  const procDur = PIPELINE_TIMINGS.PROCESSING_DURATION_S * scale;
+  const detPause = PIPELINE_TIMINGS.NODE_DETECTED_PAUSE_S * scale;
+  const txDur = PIPELINE_TIMINGS.COMPARTMENT_TX_DURATION_S * scale;
+
+  const tWireEnd = wireDur;
+  const tProcEnd = tWireEnd + procDur;
+  const tNodeDetEnd = tProcEnd + detPause;
+  const tTxEnd = tNodeDetEnd + txDur;
+
+  if (elapsed < tWireEnd) {
+    return {
+      pipelineStage: 'wire_signal',
+      nodeDisplayStatus: 'NORMAL',
+      detectedFluid: null,
+      activeElectrode,
+      wireSignalProgress: Math.min(elapsed / wireDur, 1),
+      compartmentLinkProgress: 0,
+      compartmentAlertActive: false,
+    };
+  }
+
+  if (elapsed < tProcEnd) {
+    return {
+      pipelineStage: 'processing',
+      nodeDisplayStatus: 'PROCESSING',
+      detectedFluid: activeElectrode,
+      activeElectrode,
+      wireSignalProgress: 1,
+      compartmentLinkProgress: 0,
+      compartmentAlertActive: false,
+    };
+  }
+
+  if (elapsed < tNodeDetEnd) {
+    return {
+      pipelineStage: 'leak_detected',
+      nodeDisplayStatus: 'LEAK DETECTED',
+      detectedFluid: activeElectrode,
+      activeElectrode,
+      wireSignalProgress: 1,
+      compartmentLinkProgress: 0,
+      compartmentAlertActive: false,
+    };
+  }
+
+  if (elapsed < tTxEnd) {
+    return {
+      pipelineStage: 'transmitting',
+      nodeDisplayStatus: 'LEAK DETECTED',
+      detectedFluid: activeElectrode,
+      activeElectrode,
+      wireSignalProgress: 1,
+      compartmentLinkProgress: Math.min((elapsed - tNodeDetEnd) / txDur, 1),
+      compartmentAlertActive: false,
+    };
+  }
+
+  return {
+    pipelineStage: 'compartment_alert',
+    nodeDisplayStatus: 'LEAK DETECTED',
+    detectedFluid: activeElectrode,
+    activeElectrode,
+    wireSignalProgress: 1,
+    compartmentLinkProgress: 1,
+    compartmentAlertActive: true,
+  };
+}
+
+/**
+ * Derives independent Node/CPU Box and signal pipeline state for a specific machine
  */
 export function deriveMachineNodeState(
   machineId: MachineId,
   z1: ZoneTelemetry,
-  z2: ZoneTelemetry
+  z2: ZoneTelemetry,
+  contactTime?: number | null,
+  nowMs: number = Date.now(),
+  timingScale: number = 1
 ): MachineNodeState {
   const getLed = (tel: ZoneTelemetry): 'green' | 'red' | 'amber' => {
     if (tel.status === 'alert') {
@@ -215,17 +338,30 @@ export function deriveMachineNodeState(
     return 'green';
   };
 
-  const hasAlert = z1.status === 'alert' || z2.status === 'alert';
+  const activeZoneTel = z1.status === 'alert' ? z1 : z2.status === 'alert' ? z2 : null;
+  const activeElectrode: 'oil' | 'coolant' | null =
+    activeZoneTel?.irSensorTriggered
+      ? 'oil'
+      : activeZoneTel?.electrodesTriggered
+        ? 'coolant'
+        : null;
+
+  const pipeline = evaluateNodePipeline(activeElectrode, contactTime, nowMs, timingScale);
+  const nodeDetectedOrHigher =
+    pipeline.pipelineStage === 'leak_detected' ||
+    pipeline.pipelineStage === 'transmitting' ||
+    pipeline.pipelineStage === 'compartment_alert';
 
   return {
     machineId,
     wifiConnected: true,
     mqttConnected: true,
-    buzzerActive: hasAlert,
-    beaconStatus: hasAlert ? 'red_flash' : 'green',
+    buzzerActive: pipeline.compartmentAlertActive,
+    beaconStatus: nodeDetectedOrHigher ? 'red_flash' : 'green',
+    ...pipeline,
     leds: {
-      z1: getLed(z1),
-      z2: getLed(z2)
+      z1: nodeDetectedOrHigher ? getLed(z1) : pipeline.pipelineStage === 'processing' && z1.status === 'alert' ? 'amber' : 'green',
+      z2: nodeDetectedOrHigher ? getLed(z2) : pipeline.pipelineStage === 'processing' && z2.status === 'alert' ? 'amber' : 'green',
     }
   };
 }
@@ -245,17 +381,17 @@ export function getDefaultFluidForMachine(machineId: MachineId): FluidType {
 }
 
 /**
- * Leak speed configurations
+ * Leak speed configurations:
+ * - light_flow: ~1 individual droplet per second with gradual tray accumulation
+ * - heavy_flow: continuous closely-spaced individual droplets (never a solid stream) with faster accumulation
  */
 export function getLeakSpeedConfig(speed: LeakSpeed): { dropsPerSec: number; volIncrementPerSec: number; streamFlow: boolean } {
   switch (speed) {
-    case 'flood':
-      return { dropsPerSec: 14, volIncrementPerSec: 2.8, streamFlow: true };
-    case 'seep':
-      return { dropsPerSec: 3.2, volIncrementPerSec: 0.72, streamFlow: false };
-    case 'drip':
+    case 'heavy_flow':
+      return { dropsPerSec: 4.2, volIncrementPerSec: 1.35, streamFlow: false };
+    case 'light_flow':
     default:
-      return { dropsPerSec: 1.5, volIncrementPerSec: 0.32, streamFlow: false };
+      return { dropsPerSec: 1.0, volIncrementPerSec: 0.30, streamFlow: false };
   }
 }
 

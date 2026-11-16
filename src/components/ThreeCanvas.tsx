@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DripWatchScene } from '../three/DripWatchScene';
-import { MachineId, ZoneId, FluidType, ZoneTelemetry, MachineNodeState, RenderQuality } from '../types/dripwatch';
+import { MachineId, ZoneId, FluidType, LeakSpeed, ZoneTelemetry, MachineNodeState, RenderQuality } from '../types/dripwatch';
 import { AlertCircle } from 'lucide-react';
 
 interface ThreeCanvasProps {
   telemetry: Record<MachineId, Record<ZoneId, ZoneTelemetry>>;
   nodeStates: Record<MachineId, MachineNodeState>;
-  activeStreams: Record<MachineId, { isStreaming: boolean; zone: ZoneId; fluid: FluidType }>;
+  activeStreams: Record<MachineId, { isStreaming: boolean; zone: ZoneId; fluid: FluidType; speed?: LeakSpeed }>;
   quality: RenderQuality;
   sceneRef: React.MutableRefObject<DripWatchScene | null>;
 }

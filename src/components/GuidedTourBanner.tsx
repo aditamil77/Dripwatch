@@ -1,5 +1,6 @@
 import React from 'react';
-import { GUIDED_TOUR_STEPS } from '../utils/guidedTour';
+import { FluidType, MachineId } from '../types/dripwatch';
+import { formatTourStepDisplay, GUIDED_TOUR_STEPS } from '../utils/guidedTour';
 import { 
   Play, 
   Pause, 
@@ -13,6 +14,8 @@ import {
 interface GuidedTourBannerProps {
   isActive: boolean;
   currentStepIndex: number;
+  targetMachine: MachineId;
+  targetFluid: FluidType;
   isPaused: boolean;
   stepProgressPercent: number;
   onTogglePause: () => void;
@@ -25,6 +28,8 @@ interface GuidedTourBannerProps {
 export const GuidedTourBanner: React.FC<GuidedTourBannerProps> = ({
   isActive,
   currentStepIndex,
+  targetMachine,
+  targetFluid,
   isPaused,
   stepProgressPercent,
   onTogglePause,
@@ -37,13 +42,20 @@ export const GuidedTourBanner: React.FC<GuidedTourBannerProps> = ({
 
   const step = GUIDED_TOUR_STEPS[currentStepIndex] || GUIDED_TOUR_STEPS[0];
   const totalSteps = GUIDED_TOUR_STEPS.length;
+  const formatted = formatTourStepDisplay(step, targetMachine, targetFluid);
 
   return (
-    <div className="absolute bottom-2.5 sm:bottom-3 left-1/2 -translate-x-1/2 z-30 w-[94%] sm:w-auto sm:min-w-[420px] max-w-lg pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-200 font-formal-sans select-none">
-      <div className="bg-[#0B1F3A]/90 backdrop-blur-md border border-[#1FA5A0]/60 rounded-[6px] shadow-2xl px-3 py-2 text-white">
+    <div
+      data-testid="guided-tour-banner"
+      data-step={step.stepIndex}
+      data-target-machine={targetMachine}
+      data-target-fluid={targetFluid}
+      className="absolute bottom-10 sm:bottom-11 left-1/2 -translate-x-1/2 z-30 w-[94%] sm:w-auto sm:min-w-[440px] max-w-xl pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-200 font-formal-sans select-none"
+    >
+      <div className="bg-[#0B1F3A]/95 border border-[#1FA5A0]/60 rounded-[6px] shadow-2xl px-3 py-2 text-white">
         
         {/* Slim Progress Bar */}
-        <div className="w-full bg-[#071324]/80 h-1 rounded-full mb-1.5 overflow-hidden">
+        <div className="w-full bg-[#071324]/90 h-1 rounded-full mb-1.5 overflow-hidden">
           <div 
             className="bg-[#1FA5A0] h-full transition-all duration-200 rounded-full"
             style={{ width: `${Math.min(Math.max(stepProgressPercent, 0), 100)}%` }}
@@ -57,11 +69,11 @@ export const GuidedTourBanner: React.FC<GuidedTourBannerProps> = ({
               <Activity className="w-3.5 h-3.5" />
             </span>
             <div className="min-w-0">
-              <div className="text-[9.5px] font-formal-mono text-[#1FA5A0] font-semibold tracking-wider uppercase leading-none">
-                {step.stageName} • Step {step.stepIndex} of {totalSteps}
+              <div className="text-[9.5px] font-formal-mono text-[#1FA5A0] font-semibold tracking-wider uppercase leading-none whitespace-nowrap truncate">
+                {step.stageName} • {step.stepIndex}/{totalSteps}
               </div>
-              <h3 className="font-semibold text-xs text-white truncate max-w-[210px] sm:max-w-[260px] leading-snug">
-                {step.title}
+              <h3 className="font-semibold text-xs text-white truncate max-w-[230px] sm:max-w-[290px] leading-snug">
+                {formatted.title}
               </h3>
             </div>
           </div>
@@ -122,12 +134,12 @@ export const GuidedTourBanner: React.FC<GuidedTourBannerProps> = ({
 
         {/* Compact Caption */}
         <p className="text-[11px] text-slate-200 leading-snug line-clamp-2 mb-1.5">
-          {step.caption}
+          {formatted.caption}
         </p>
 
-        {/* Subtle Footer: Focus Machine & Timing indicator */}
+        {/* Subtle Footer: Target Machine/Fluid & Timing indicator */}
         <div className="flex items-center justify-between text-[9px] font-formal-mono text-slate-400 pt-1 border-t border-[#1E3557]/60">
-          <span>Target: {step.focusMachine.toUpperCase()} Plant Cell</span>
+          <span>Target: {targetMachine.toUpperCase()} ({targetFluid.toUpperCase()})</span>
           <span className="text-[#1FA5A0]">Auto-advancing • {step.durationSeconds}s</span>
         </div>
 

@@ -242,40 +242,174 @@ export function createMachineNameBoardTexture(
 }
 
 /**
- * Generates ultra-high-resolution (1024x512) badge texture for individual ESP32 node boxes
+ * Generates high-resolution (1024x640) live display texture for each machine's local Node/CPU Box
  */
-export function createNodeBoxLabelTexture(nodeName: string, isAlert: boolean = false): THREE.CanvasTexture {
+export function createNodeBoxLabelTexture(
+  nodeName: string,
+  displayStatus: 'NORMAL' | 'PROCESSING' | 'LEAK DETECTED' | boolean = 'NORMAL',
+  detectedFluid: 'oil' | 'coolant' | null = null
+): THREE.CanvasTexture {
+  const status: 'NORMAL' | 'PROCESSING' | 'LEAK DETECTED' =
+    typeof displayStatus === 'boolean' ? (displayStatus ? 'LEAK DETECTED' : 'NORMAL') : displayStatus;
+
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = 512;
+  canvas.height = 640;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = isAlert ? '#3b0a0a' : '#0B1F3A';
-  ctx.fillRect(0, 0, 1024, 512);
+  const isAlert = status === 'LEAK DETECTED';
+  const isProc = status === 'PROCESSING';
 
-  ctx.strokeStyle = isAlert ? '#ef4444' : '#1FA5A0';
-  ctx.lineWidth = 20;
-  ctx.strokeRect(10, 10, 1004, 492);
+  ctx.fillStyle = isAlert ? '#3b0a0a' : isProc ? '#2d1c05' : '#0B1F3A';
+  ctx.fillRect(0, 0, 1024, 640);
+
+  ctx.strokeStyle = isAlert ? '#ef4444' : isProc ? '#f59e0b' : '#1FA5A0';
+  ctx.lineWidth = 22;
+  ctx.strokeRect(11, 11, 1002, 618);
 
   // Header
-  ctx.fillStyle = isAlert ? '#f87171' : '#38bdf8';
-  ctx.font = `bold 56px ${MONO_FONT}`;
-  ctx.fillText('DRIPWATCH IoT NODE', 48, 96);
+  ctx.fillStyle = isAlert ? '#fca5a5' : isProc ? '#fcd34d' : '#38bdf8';
+  ctx.font = `bold 52px ${MONO_FONT}`;
+  ctx.fillText('LOCAL NODE / CPU BOX', 48, 92);
 
-  // Node Title
+  // Machine Title
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 112px ${SANS_FONT}`;
-  ctx.fillText(nodeName.toUpperCase(), 48, 240);
+  ctx.font = `bold 116px ${SANS_FONT}`;
+  ctx.fillText(nodeName.toUpperCase(), 48, 224);
 
-  // Status text
-  ctx.fillStyle = isAlert ? '#ef4444' : '#4ade80';
-  ctx.font = `bold 60px ${MONO_FONT}`;
-  ctx.fillText(isAlert ? 'STATUS: LEAK ALERT' : 'STATUS: NORMAL', 48, 350);
+  // Prominent Status Pill
+  ctx.fillStyle = isAlert ? '#dc2626' : isProc ? '#d97706' : '#166534';
+  ctx.beginPath();
+  ctx.roundRect(48, 272, 928, 160, 22);
+  ctx.fill();
+  ctx.strokeStyle = isAlert ? '#fecaca' : isProc ? '#fde68a' : '#4ade80';
+  ctx.lineWidth = 8;
+  ctx.stroke();
 
-  // Enclosure spec
-  ctx.fillStyle = '#cbd5e1';
-  ctx.font = `bold 42px ${MONO_FONT}`;
-  ctx.fillText('IP67 • DUAL-ZONE MCU • MQTT', 48, 435);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 84px ${MONO_FONT}`;
+  ctx.fillText(status, 86, 378);
+
+  // Fluid / Channel readout line
+  ctx.fillStyle = isAlert || isProc ? '#fef08a' : '#cbd5e1';
+  ctx.font = `bold 44px ${MONO_FONT}`;
+  const detailText =
+    isAlert && detectedFluid
+      ? `TYPE: ${detectedFluid.toUpperCase()} LEAK • TX COMPARTMENT`
+      : isProc && detectedFluid
+        ? `ANALYZING ${detectedFluid.toUpperCase()} ELECTRODE SIGNAL...`
+        : 'DUAL ELECTRODE INPUT • STANDBY';
+  ctx.fillText(detailText, 48, 540);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 16;
+  return texture;
+}
+
+/**
+ * Generates high-resolution (1280x768) display texture for the central General Compartment Box
+ */
+export function createGeneralCompartmentTexture(
+  alerts: Array<{ machineId: string; fluid: 'oil' | 'coolant' }>
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 768;
+  const ctx = canvas.getContext('2d')!;
+
+  const hasAlert = alerts.length > 0;
+
+  // Outer panel background
+  ctx.fillStyle = hasAlert ? '#2b0909' : '#071324';
+  ctx.fillRect(0, 0, 1280, 768);
+
+  ctx.strokeStyle = hasAlert ? '#ef4444' : '#1FA5A0';
+  ctx.lineWidth = 20;
+  ctx.strokeRect(10, 10, 1260, 748);
+
+  // Header Bar
+  ctx.fillStyle = hasAlert ? '#7f1d1d' : '#0B1F3A';
+  ctx.fillRect(20, 20, 1240, 120);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 64px ${SANS_FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillText('GENERAL COMPARTMENT BOX', 50, 100);
+
+  // Top Status Banner
+  if (hasAlert) {
+    const primary = alerts[0];
+    const mNum = primary.machineId.toUpperCase().replace('M', 'MACHINE 0');
+    const fluidLabel = primary.fluid.toUpperCase();
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.roundRect(44, 168, 1192, 164, 18);
+    ctx.fill();
+    ctx.strokeStyle = '#fecaca';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 56px ${SANS_FONT}`;
+    ctx.fillText(`LEAK ALERT: ${mNum}`, 78, 240);
+
+    ctx.fillStyle = primary.fluid === 'oil' ? '#fde68a' : '#a5f3fc';
+    ctx.font = `bold 48px ${MONO_FONT}`;
+    ctx.fillText(`LEAKAGE TYPE: ${fluidLabel} DETECTED`, 78, 304);
+  } else {
+    ctx.fillStyle = '#14532d';
+    ctx.beginPath();
+    ctx.roundRect(44, 168, 1192, 140, 18);
+    ctx.fill();
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 58px ${MONO_FONT}`;
+    ctx.fillText('PLANT STATUS: NORMAL', 78, 258);
+  }
+
+  // 4 Machine Channel Cells (M1, M2, M3, M4)
+  const slots: Array<{ id: string; x: number; y: number }> = [
+    { id: 'm1', x: 44, y: 368 },
+    { id: 'm2', x: 656, y: 368 },
+    { id: 'm3', x: 44, y: 556 },
+    { id: 'm4', x: 656, y: 556 },
+  ];
+
+  slots.forEach(s => {
+    const match = alerts.find(a => a.machineId === s.id);
+    const isRowAlert = Boolean(match);
+    ctx.fillStyle = isRowAlert ? '#450a0a' : '#0B1F3A';
+    ctx.beginPath();
+    ctx.roundRect(s.x, s.y, 580, 164, 14);
+    ctx.fill();
+
+    ctx.strokeStyle = isRowAlert ? '#ef4444' : '#1E3557';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    // Status LED circle
+    ctx.fillStyle = isRowAlert ? '#ef4444' : '#22c55e';
+    ctx.beginPath();
+    ctx.arc(s.x + 52, s.y + 82, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 44px ${SANS_FONT}`;
+    ctx.fillText(s.id.toUpperCase().replace('M', 'MACHINE 0'), s.x + 96, s.y + 72);
+
+    ctx.fillStyle = isRowAlert
+      ? match!.fluid === 'oil' ? '#fbbf24' : '#38bdf8'
+      : '#4ade80';
+    ctx.font = `bold 38px ${MONO_FONT}`;
+    ctx.fillText(isRowAlert ? `${match!.fluid.toUpperCase()} LEAK ALERT` : 'NORMAL', s.x + 96, s.y + 130);
+  });
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -430,47 +564,47 @@ export function createWetBadgeTexture(): THREE.CanvasTexture {
 
 /**
  * Creates high-contrast engraved metallic nameplate texture for detection electrodes:
- * "OIL DETECTION ELECTRODE" or "COOLANT DETECTION ELECTRODE"
+ * "OIL ELECTRODE" or "COOLANT ELECTRODE"
  */
 export function createElectrodeTagTexture(type: 'oil' | 'coolant'): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 160;
+  canvas.width = 640;
+  canvas.height = 176;
   const ctx = canvas.getContext('2d')!;
 
-  // Brushed steel background plate
+  // Brushed dark steel plate
   ctx.fillStyle = '#0f172a';
   ctx.beginPath();
-  ctx.roundRect(6, 6, 500, 148, 16);
+  ctx.roundRect(6, 6, 628, 164, 16);
   ctx.fill();
 
   const isOil = type === 'oil';
-  const accentColor = isOil ? '#f59e0b' : '#38bdf8';
+  const accentColor = isOil ? '#f59e0b' : '#06b6d4';
 
   // Metallic border
   ctx.strokeStyle = accentColor;
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 8;
   ctx.beginPath();
-  ctx.roundRect(6, 6, 500, 148, 16);
+  ctx.roundRect(6, 6, 628, 164, 16);
   ctx.stroke();
 
   // Fastener rivets in corners
-  ctx.fillStyle = '#64748b';
-  [[24, 24], [488, 24], [24, 136], [488, 136]].forEach(([rx, ry]) => {
+  ctx.fillStyle = '#94a3b8';
+  [[24, 24], [616, 24], [24, 152], [616, 152]].forEach(([rx, ry]) => {
     ctx.beginPath();
     ctx.arc(rx, ry, 6, 0, Math.PI * 2);
     ctx.fill();
   });
 
-  // Electrode Type Title
+  // Electrode exact required label: OIL ELECTRODE / COOLANT ELECTRODE
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 40px ${SANS_FONT}`;
+  ctx.font = `bold 52px ${SANS_FONT}`;
   ctx.textAlign = 'center';
-  ctx.fillText(isOil ? 'OIL DETECTION' : 'COOLANT DETECTION', 256, 68);
+  ctx.fillText(isOil ? 'OIL ELECTRODE' : 'COOLANT ELECTRODE', 320, 82);
 
   ctx.fillStyle = accentColor;
   ctx.font = `bold 30px ${MONO_FONT}`;
-  ctx.fillText('CONDUCTIVE ELECTRODE', 256, 114);
+  ctx.fillText('CONDUCTIVE SENSOR ROD', 320, 134);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;

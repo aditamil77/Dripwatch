@@ -4,7 +4,8 @@ import {
   ZoneId, 
   FluidType, 
   LeakSpeed, 
-  ZoneTelemetry 
+  ZoneTelemetry,
+  MachineNodeState
 } from '../types/dripwatch';
 import { 
   Sliders, 
@@ -14,7 +15,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Activity,
-  Layers
+  Cpu
 } from 'lucide-react';
 import { SensorReadingCard } from './SensorReadingCard';
 
@@ -29,11 +30,13 @@ export interface DetectionEventLog {
 
 interface RightSidebarProps {
   telemetry: Record<MachineId, Record<ZoneId, ZoneTelemetry>>;
+  nodeStates?: Record<MachineId, MachineNodeState>;
   selectedMachine: MachineId;
   onSelectMachine: (machineId: MachineId) => void;
   selectedZone: ZoneId;
   onSelectZone: (zone: ZoneId) => void;
   selectedFluid: FluidType;
+  onSelectFluid?: (fluid: FluidType) => void;
   leakSpeed: LeakSpeed;
   onChangeSpeed: (speed: LeakSpeed) => void;
   isLeaking: boolean;
@@ -47,11 +50,12 @@ interface RightSidebarProps {
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({
   telemetry,
+  nodeStates,
   selectedMachine,
   onSelectMachine,
   selectedZone,
-  onSelectZone,
   selectedFluid,
+  onSelectFluid,
   leakSpeed,
   onChangeSpeed,
   isLeaking,
@@ -62,6 +66,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   onCloseMobileDrawer
 }) => {
   const currentTelemetry = telemetry[selectedMachine]?.[selectedZone];
+  const currentNode = nodeStates?.[selectedMachine];
+  const activeCompartmentAlerts = nodeStates
+    ? (Object.values(nodeStates) as MachineNodeState[]).filter(n => n.compartmentAlertActive)
+    : [];
 
   // Narrow icon rail when collapsed
   if (isCollapsed) {
@@ -156,71 +164,70 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 onChange={(e) => onSelectMachine(e.target.value as MachineId)}
                 className="w-full bg-[#071324] border border-[#1E3557] rounded-[4px] px-2 py-1 text-xs text-white font-formal-sans focus:outline-none focus:border-[#1FA5A0] cursor-pointer"
               >
-                <option value="m1">M1 Hydraulic Press (Oil)</option>
-                <option value="m2">M2 CNC Milling (Coolant)</option>
-                <option value="m3">M3 Lathe (Coolant/Oil)</option>
-                <option value="m4">M4 HPU Station (Oil)</option>
+                <option value="m1">Machine 01 – Hydraulic Press</option>
+                <option value="m2">Machine 02 – CNC Milling Center</option>
+                <option value="m3">Machine 03 – Heavy Lathe</option>
+                <option value="m4">Machine 04 – Hydraulic Power Unit</option>
               </select>
             </div>
 
-            {/* Tray Containment Zone */}
+            {/* Fluid Type Selector (Interactive Oil vs Coolant) */}
             <div className="space-y-0.5">
               <label className="text-[9.5px] text-slate-400 font-formal-mono uppercase tracking-wider block">
-                Tray Zone
+                Fluid Type
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  onClick={() => onSelectZone('z1')}
-                  className={`py-1 rounded-[4px] text-xs font-formal-mono border transition-all cursor-pointer ${
-                    selectedZone === 'z1'
-                      ? 'bg-[#1FA5A0] text-slate-950 font-bold border-[#1FA5A0] shadow-sm'
-                      : 'bg-[#071324] text-slate-300 border-[#1E3557] hover:border-[#1FA5A0]/40'
+                  type="button"
+                  onClick={() => onSelectFluid && onSelectFluid('oil')}
+                  aria-label="Oil (Amber)"
+                  className={`py-1.5 px-2 rounded-[4px] text-[11px] font-formal-mono border transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                    selectedFluid === 'oil'
+                      ? 'bg-[#D98200] text-slate-950 font-bold border-[#D98200] shadow-sm'
+                      : 'bg-[#071324] text-slate-300 border-[#1E3557] hover:border-[#D98200]/40'
                   }`}
                 >
-                  Zone 1
+                  <span className="w-2 h-2 rounded-full bg-[#D98200] border border-slate-950 inline-block shrink-0" />
+                  <span>Oil</span>
                 </button>
                 <button
-                  onClick={() => onSelectZone('z2')}
-                  className={`py-1 rounded-[4px] text-xs font-formal-mono border transition-all cursor-pointer ${
-                    selectedZone === 'z2'
+                  type="button"
+                  onClick={() => onSelectFluid && onSelectFluid('coolant')}
+                  aria-label="Coolant (Cyan)"
+                  className={`py-1.5 px-2 rounded-[4px] text-[11px] font-formal-mono border transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                    selectedFluid === 'coolant'
                       ? 'bg-[#1FA5A0] text-slate-950 font-bold border-[#1FA5A0] shadow-sm'
                       : 'bg-[#071324] text-slate-300 border-[#1E3557] hover:border-[#1FA5A0]/40'
                   }`}
                 >
-                  Zone 2
+                  <span className="w-2 h-2 rounded-full bg-[#06b6d4] border border-slate-950 inline-block shrink-0" />
+                  <span>Coolant</span>
                 </button>
               </div>
             </div>
 
-            {/* Fluid Type Badge */}
-            <div className="flex items-center justify-between text-xs py-1 px-2 rounded-[4px] bg-[#071324] border border-[#1E3557]">
-              <span className="text-[10px] text-slate-400 font-formal-mono">Fluid Type</span>
-              <span className={`font-semibold font-formal-mono uppercase text-[10px] px-1.5 py-0.2 rounded ${
-                selectedFluid === 'oil' 
-                  ? 'bg-[#D98200]/20 text-[#D98200] border border-[#D98200]/40' 
-                  : 'bg-[#1FA5A0]/20 text-[#1FA5A0] border border-[#1FA5A0]/40'
-              }`}>
-                {selectedFluid === 'oil' ? 'Oil (Amber)' : 'Coolant (Teal)'}
-              </span>
-            </div>
-
-            {/* Leak Velocity */}
+            {/* Leak Velocity: Exactly Two Modes (Light Flow & Heavy Flow) */}
             <div className="space-y-0.5">
               <label className="text-[9.5px] text-slate-400 font-formal-mono uppercase tracking-wider block">
                 Leak Velocity
               </label>
-              <div className="grid grid-cols-3 gap-1">
-                {(['drip', 'seep', 'flood'] as LeakSpeed[]).map(speed => (
+              <div className="grid grid-cols-2 gap-1.5">
+                {([
+                  { id: 'light_flow', label: 'Light Flow' },
+                  { id: 'heavy_flow', label: 'Heavy Flow' }
+                ] as { id: LeakSpeed; label: string }[]).map(opt => (
                   <button
-                    key={speed}
-                    onClick={() => onChangeSpeed(speed)}
-                    className={`py-1 rounded-[4px] text-xs font-formal-mono capitalize border transition-all cursor-pointer text-center ${
-                      leakSpeed === speed
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onChangeSpeed(opt.id)}
+                    aria-pressed={leakSpeed === opt.id}
+                    className={`py-1.5 px-2 rounded-[4px] text-[11px] font-formal-mono border transition-all cursor-pointer text-center whitespace-nowrap ${
+                      leakSpeed === opt.id
                         ? 'bg-[#D98200] text-slate-950 font-bold border-[#D98200] shadow-sm'
                         : 'bg-[#071324] text-slate-300 border-[#1E3557] hover:border-[#D98200]/40'
                     }`}
                   >
-                    {speed}
+                    {opt.label}
                   </button>
                 ))}
               </div>
@@ -261,7 +268,76 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           </div>
         </section>
 
-        {/* 2. Sensor Reading Card (Prompt A.4: Live line chart, threshold line, 3 points marked, detection time) */}
+        {/* 2. Signal & Detection Pipeline Card */}
+        {currentNode && (
+          <section
+            data-testid="signal-pipeline-card"
+            className="bg-[#11294D] border border-[#1E3557] rounded-[6px] p-2.5 space-y-1.5 shadow-md"
+          >
+            <div className="flex items-center justify-between pb-1 border-b border-[#1E3557]">
+              <span className="text-[10.5px] font-formal-mono font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-[#1FA5A0]" />
+                Detection Pipeline ({selectedMachine.toUpperCase()})
+              </span>
+              <span
+                className={`text-[9.5px] font-formal-mono font-bold px-1.5 py-0.5 rounded-[3px] ${
+                  currentNode.nodeDisplayStatus === 'LEAK DETECTED'
+                    ? 'bg-[#C0392B] text-white'
+                    : currentNode.nodeDisplayStatus === 'PROCESSING'
+                      ? 'bg-[#D98200] text-slate-950'
+                      : 'bg-[#2E8540]/25 text-emerald-300 border border-[#2E8540]/50'
+                }`}
+              >
+                {currentNode.nodeDisplayStatus}
+              </span>
+            </div>
+
+            <div className="space-y-1 text-[10px] font-formal-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Electrode:</span>
+                <span className={currentNode.activeElectrode ? 'text-white font-semibold' : 'text-slate-500'}>
+                  {currentNode.activeElectrode
+                    ? `${currentNode.activeElectrode.toUpperCase()} ELECTRODE`
+                    : 'No contact'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Local Node/CPU:</span>
+                <span
+                  className={
+                    currentNode.nodeDisplayStatus === 'LEAK DETECTED'
+                      ? 'text-rose-400 font-bold'
+                      : currentNode.nodeDisplayStatus === 'PROCESSING'
+                        ? 'text-amber-300 font-bold'
+                        : 'text-emerald-400'
+                  }
+                >
+                  {currentNode.nodeDisplayStatus}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">General Comp. Box:</span>
+                <span
+                  className={
+                    activeCompartmentAlerts.length > 0
+                      ? 'text-rose-400 font-bold'
+                      : currentNode.pipelineStage === 'transmitting'
+                        ? 'text-cyan-300 font-bold'
+                        : 'text-emerald-400'
+                  }
+                >
+                  {activeCompartmentAlerts.length > 0
+                    ? `ALERT (${activeCompartmentAlerts.map(a => `${a.machineId.toUpperCase()} ${a.detectedFluid?.toUpperCase()}`).join(', ')})`
+                    : currentNode.pipelineStage === 'transmitting'
+                      ? 'TRANSMITTING...'
+                      : 'NORMAL'}
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* 3. Sensor Reading Card */}
         {currentTelemetry && (
           <SensorReadingCard
             telemetry={currentTelemetry}

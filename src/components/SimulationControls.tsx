@@ -208,20 +208,23 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
             {/* Leak Speed */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] uppercase font-formal-mono tracking-wider text-slate-400 font-medium">
-                Discharge rate:
+                Leak Velocity:
               </label>
-              <div className="grid grid-cols-3 gap-1 bg-[#071324] p-1 rounded-[4px] border border-[#1E3557]">
-                {(['drip', 'seep', 'flood'] as LeakSpeed[]).map((spd) => (
+              <div className="grid grid-cols-2 gap-1 bg-[#071324] p-1 rounded-[4px] border border-[#1E3557]">
+                {([
+                  { id: 'light_flow', label: 'Light Flow' },
+                  { id: 'heavy_flow', label: 'Heavy Flow' }
+                ] as { id: LeakSpeed; label: string }[]).map((spd) => (
                   <button
-                    key={spd}
-                    onClick={() => onChangeSpeed(spd)}
-                    className={`py-1.5 px-1 rounded-[3px] text-xs font-formal-mono capitalize transition-all ${
-                      leakSpeed === spd
+                    key={spd.id}
+                    onClick={() => onChangeSpeed(spd.id)}
+                    className={`py-1.5 px-1 rounded-[3px] text-xs font-formal-mono transition-all ${
+                      leakSpeed === spd.id
                         ? 'bg-[#1E3557] text-white font-semibold'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    {spd}
+                    {spd.label}
                   </button>
                 ))}
               </div>

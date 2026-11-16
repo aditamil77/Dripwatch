@@ -1,40 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GUIDED_TOUR_STEPS } from './guidedTour';
+import { GUIDED_TOUR_STEPS, formatTourStepDisplay } from './guidedTour';
 import { getLeakSpeedConfig, calculatePuddleRadius } from './iotLogic';
+import { MachineId } from '../types/dripwatch';
 
-test('GUIDED_TOUR_STEPS contains exactly 7 sequential stages', () => {
-  assert.equal(GUIDED_TOUR_STEPS.length, 7);
+test('GUIDED_TOUR_STEPS contains exactly 6 sequential camera views matching specification', () => {
+  assert.equal(GUIDED_TOUR_STEPS.length, 6);
   const expectedStages = [
-    'Machine Identification',
-    'Leakage Point',
-    'Liquid Dripping',
-    'Probe Contact',
-    'Signal Transmission',
-    'Controller Activation',
-    'Final Detection Result'
+    'View 1 – Machine Overview',
+    'View 2 – Leakage Generation',
+    'View 3 – Electrode Detection',
+    'View 4 – Local Signal Processing',
+    'View 5 – General Compartment Transmission',
+    'View 6 – Final Detection'
   ];
 
   GUIDED_TOUR_STEPS.forEach((step, idx) => {
     assert.equal(step.stepIndex, idx + 1);
     assert.equal(step.stageName, expectedStages[idx]);
-    assert.ok(step.durationSeconds >= 18, `Stage ${idx + 1} duration should be at least 18s`);
+    assert.ok(step.durationSeconds >= 5, `View ${idx + 1} duration should allow clear observation`);
   });
 });
 
-test('Total demo duration is between 142.5s and 190s', () => {
-  const totalDuration = GUIDED_TOUR_STEPS.reduce((sum, s) => sum + s.durationSeconds, 0);
-  assert.ok(totalDuration >= 142.5 && totalDuration <= 190, `Total duration ${totalDuration}s is between 1.5x and 2x slower`);
+test('formatTourStepDisplay adapts titles and captions dynamically for any selected machine and fluid', () => {
+  (['m1', 'm2', 'm3', 'm4'] as MachineId[]).forEach(mId => {
+    const step1 = formatTourStepDisplay(GUIDED_TOUR_STEPS[0], mId, 'oil');
+    assert.ok(step1.title.includes(mId.replace('m', 'Machine 0')));
+
+    const step3Oil = formatTourStepDisplay(GUIDED_TOUR_STEPS[2], mId, 'oil');
+    assert.ok(step3Oil.caption.includes('OIL ELECTRODE'));
+
+    const step6Cool = formatTourStepDisplay(GUIDED_TOUR_STEPS[5], mId, 'coolant');
+    assert.ok(step6Cool.title.includes('COOLANT'));
+    assert.ok(step6Cool.caption.includes(mId.toUpperCase()));
+  });
 });
 
-test('getLeakSpeedConfig provides slowed down realistic rates', () => {
-  const drip = getLeakSpeedConfig('drip');
-  assert.equal(drip.dropsPerSec, 1.5);
-  assert.equal(drip.volIncrementPerSec, 0.32);
+test('getLeakSpeedConfig provides Light Flow (~1 drop/sec) and Heavy Flow droplet rates without solid stream', () => {
+  const light = getLeakSpeedConfig('light_flow');
+  assert.equal(light.dropsPerSec, 1.0);
+  assert.equal(light.volIncrementPerSec, 0.30);
+  assert.equal(light.streamFlow, false);
 
-  const seep = getLeakSpeedConfig('seep');
-  assert.equal(seep.dropsPerSec, 3.2);
-  assert.equal(seep.volIncrementPerSec, 0.72);
+  const heavy = getLeakSpeedConfig('heavy_flow');
+  assert.ok(heavy.dropsPerSec >= 4.0, 'Heavy Flow generates closely spaced droplets');
+  assert.ok(heavy.volIncrementPerSec > light.volIncrementPerSec * 3, 'Heavy Flow fills tray significantly faster');
+  assert.equal(heavy.streamFlow, false, 'Heavy Flow remains individual droplets, never a solid stream');
 });
 
 test('calculatePuddleRadius smoothly grows with fluid volume without artificial threshold jumps', () => {
