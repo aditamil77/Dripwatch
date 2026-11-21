@@ -27,7 +27,7 @@ import {
   getDefaultFluidForMachine,
   PAD_DISTANCES
 } from './utils/iotLogic';
-import { GUIDED_TOUR_STEPS } from './utils/guidedTour';
+import { GUIDED_TOUR_STEPS, GUIDED_TOUR_MACHINE, GUIDED_TOUR_FLUID } from './utils/guidedTour';
 import { soundEngine } from './utils/audioSynth';
 import { 
   Volume2, 
@@ -94,25 +94,38 @@ export default function App() {
   const [isEvaluatorGuideOpen, setIsEvaluatorGuideOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Dynamic 6-View Guided Tour State (operates on whichever machine & fluid the user selected)
+  // Guided Tour State (Locked exclusively to Machine 01 / M1 & Industrial Oil)
   const [isTourActive, setIsTourActive] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [isTourPaused, setIsTourPaused] = useState(false);
   const [tourStepElapsed, setTourStepElapsed] = useState(0);
-  const [tourTargetMachine, setTourTargetMachine] = useState<MachineId>('m2');
-  const [tourTargetFluid, setTourTargetFluid] = useState<FluidType>('coolant');
+  const tourTargetMachine: MachineId = GUIDED_TOUR_MACHINE;
+  const tourTargetFluid: FluidType = GUIDED_TOUR_FLUID;
 
   // Drop accumulator for steady, natural drop-by-drop detachment
   const dropAccumulatorRef = useRef<Record<MachineId, number>>({ m1: 0, m2: 0, m3: 0, m4: 0 });
 
-  // Handle machine selection change & enforce fluid restrictions
+  // Handle machine selection change & enforce fluid restrictions (M1 + Oil locked during Guided Demo; normal outside Guided Demo)
   const handleSelectMachine = useCallback((mId: MachineId) => {
+    if (isTourActive && mId !== GUIDED_TOUR_MACHINE) {
+      return;
+    }
     setSelectedMachine(mId);
-    if (!isFluidAllowedForMachine(mId, selectedFluid)) {
+    if (isTourActive) {
+      setSelectedFluid(GUIDED_TOUR_FLUID);
+    } else if (!isFluidAllowedForMachine(mId, selectedFluid)) {
       setSelectedFluid(getDefaultFluidForMachine(mId));
     }
     sceneRef.current?.flyToLeakSimulation(mId, selectedZone);
-  }, [selectedFluid, selectedZone]);
+  }, [isTourActive, selectedFluid, selectedZone]);
+
+  // Handle fluid selection change (Locked to Oil during Guided Demo only; normal Oil/Coolant switching outside Guided Demo)
+  const handleSelectFluid = useCallback((fluid: FluidType) => {
+    if (isTourActive && fluid !== GUIDED_TOUR_FLUID) {
+      return;
+    }
+    setSelectedFluid(fluid);
+  }, [isTourActive]);
 
   // Handle sound toggle
   const handleToggleSound = useCallback(() => {
@@ -149,9 +162,12 @@ export default function App() {
   }, []);
 
   const handleFlyToMachine = useCallback((id: MachineId) => {
+    if (isTourActive && id !== GUIDED_TOUR_MACHINE) {
+      return;
+    }
     soundEngine.playClickSound();
     sceneRef.current?.flyToMachine(id);
-  }, []);
+  }, [isTourActive]);
 
   const handleFollowLeak = useCallback(() => {
     soundEngine.playClickSound();
@@ -266,22 +282,22 @@ export default function App() {
     }]);
   }, []);
 
-  // Guided Demo Tour Automation Controller (Dynamic for ANY selected Machine & Fluid)
+  // Guided Demo Tour Automation Controller (Always locked exclusively to Machine 01 / M1 & Industrial Oil)
   const startGuidedTour = useCallback(() => {
     soundEngine.playClickSound();
     dropAccumulatorRef.current = { m1: 0, m2: 0, m3: 0, m4: 0 };
     sceneRef.current?.resetSimulation();
     setMachineLeaks(createInitialLeaks());
     setPipelineNowMs(Date.now());
-    setTourTargetMachine(selectedMachine);
-    setTourTargetFluid(selectedFluid);
+    setSelectedMachine(GUIDED_TOUR_MACHINE);
+    setSelectedFluid(GUIDED_TOUR_FLUID);
     setSelectedZone('z1');
     setIsTourActive(true);
     setTourStepIndex(0);
     setIsTourPaused(false);
     setTourStepElapsed(0);
-    sceneRef.current?.flyToDemoStep(1, selectedMachine);
-  }, [selectedMachine, selectedFluid]);
+    sceneRef.current?.flyToDemoStep(1, GUIDED_TOUR_MACHINE);
+  }, []);
 
   // Guided Demo manual step advance: ensures skipped-ahead steps have matching physical puddle + contact progression
   const handleTourNextStep = useCallback(() => {
@@ -293,13 +309,13 @@ export default function App() {
 
       if (nextStep && (nextStep.action === 'node_processing' || nextStep.action === 'compartment_transmission' || nextStep.action === 'final_detection')) {
         const now = Date.now();
-        // Match realistic elapsed time into scaled Guided Demo pipeline: processing (~4.5s), transmitting (~10.5s), final alert (~17s)
+        // Match realistic elapsed time into slower Guided Demo pipeline (scale 9.5): processing (~14s), transmitting (~27s), final alert (~40s)
         const offsetMs =
           nextStep.action === 'node_processing'
-            ? 4500
+            ? 14000
             : nextStep.action === 'compartment_transmission'
-              ? 10500
-              : 17000;
+              ? 27000
+              : 40000;
         setMachineLeaks(prev => {
           const cur = prev[tourTargetMachine];
           const existingElapsed = cur.contactTime ? now - cur.contactTime : 0;
@@ -350,8 +366,8 @@ export default function App() {
         setSelectedZone('z1');
         setSelectedFluid(tourTargetFluid);
         setLeakSpeed('light_flow');
-        // Delay drip start slightly during the initial camera settle so View 2 shows drop-by-drop formation without pre-contacting electrodes
-        const delayMs = tourTargetFluid === 'coolant' ? 2800 : 1200;
+        // Allow smooth camera glide to settle on the nozzle before drop-by-drop oil leakage begins
+        const delayMs = 3400;
         delayedDripTimer = window.setTimeout(() => {
           setMachineLeaks(prev => ({
             ...prev,
@@ -370,7 +386,7 @@ export default function App() {
           }));
         }, delayMs);
       } else if (step.action === 'electrode_detection') {
-        const detectionSpeed: LeakSpeed = tourTargetFluid === 'oil' ? 'heavy_flow' : 'light_flow';
+        const detectionSpeed: LeakSpeed = 'light_flow';
         setLeakSpeed(detectionSpeed);
         setMachineLeaks(prev => {
           const cur = prev[tourTargetMachine];
@@ -419,7 +435,7 @@ export default function App() {
       const step = GUIDED_TOUR_STEPS[tourStepIndex];
       if (!step) return;
 
-      const totalWithPause = step.durationSeconds + 1.0;
+      const totalWithPause = step.durationSeconds + 2.0;
 
       setTourStepElapsed(prev => {
         const next = prev + 0.2;
@@ -531,8 +547,8 @@ export default function App() {
     return res;
   }, [machineLeaks]);
 
-  // Derive independent Node/CPU Box + Signal Pipeline states (brisk 3.9s interactive, 3.8x paced for 6-view Guided Demo)
-  const pipelineScale = isTourActive ? 3.8 : 1;
+  // Derive independent Node/CPU Box + Signal Pipeline states (brisk 3.9s interactive, 9.5x slower paced for 6-view Guided Demo)
+  const pipelineScale = isTourActive ? 9.5 : 1;
   const evaluatedNodeStates = React.useMemo(() => {
     const res: Record<MachineId, MachineNodeState> = {} as any;
     INITIAL_MACHINES.forEach(mId => {
@@ -820,7 +836,7 @@ export default function App() {
             selectedZone={selectedZone}
             onSelectZone={setSelectedZone}
             selectedFluid={selectedFluid}
-            onSelectFluid={setSelectedFluid}
+            onSelectFluid={handleSelectFluid}
             leakSpeed={leakSpeed}
             onChangeSpeed={handleChangeSpeed}
             isLeaking={machineLeaks[selectedMachine].isLeaking}

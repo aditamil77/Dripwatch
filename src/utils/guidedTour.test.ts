@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GUIDED_TOUR_STEPS, formatTourStepDisplay } from './guidedTour';
-import { getLeakSpeedConfig, calculatePuddleRadius } from './iotLogic';
+import { GUIDED_TOUR_STEPS, GUIDED_TOUR_MACHINE, GUIDED_TOUR_FLUID, formatTourStepDisplay } from './guidedTour';
+import { getLeakSpeedConfig, calculatePuddleRadius, MACHINE_COORDINATES, GATEWAY_COORDINATES } from './iotLogic';
+import { INDUSTRIAL_WORKER_SPECS } from '../three/industrialWorkers';
 import { MachineId } from '../types/dripwatch';
 
-test('GUIDED_TOUR_STEPS contains exactly 6 sequential camera views matching specification', () => {
+test('GUIDED_TOUR_MACHINE is locked exclusively to M1 and GUIDED_TOUR_FLUID to oil', () => {
+  assert.equal(GUIDED_TOUR_MACHINE, 'm1');
+  assert.equal(GUIDED_TOUR_FLUID, 'oil');
+});
+
+test('GUIDED_TOUR_STEPS contains exactly 6 sequential camera views with slower observation durations', () => {
   assert.equal(GUIDED_TOUR_STEPS.length, 6);
   const expectedStages = [
     'View 1 – Machine Overview',
@@ -15,10 +21,53 @@ test('GUIDED_TOUR_STEPS contains exactly 6 sequential camera views matching spec
     'View 6 – Final Detection'
   ];
 
+  let totalDuration = 0;
   GUIDED_TOUR_STEPS.forEach((step, idx) => {
     assert.equal(step.stepIndex, idx + 1);
     assert.equal(step.stageName, expectedStages[idx]);
-    assert.ok(step.durationSeconds >= 5, `View ${idx + 1} duration should allow clear observation`);
+    assert.ok(step.durationSeconds >= 9, `View ${idx + 1} duration (${step.durationSeconds}s) should be slowed to >= 9s`);
+    totalDuration += step.durationSeconds;
+  });
+  assert.ok(totalDuration >= 60, `Total guided simulation duration (${totalDuration}s) should allow calm observation`);
+});
+
+test('INDUSTRIAL_WORKER_SPECS distributes workers across distinct floor areas with unique poses and full equipment clearance', () => {
+  assert.ok(INDUSTRIAL_WORKER_SPECS.length >= 4 && INDUSTRIAL_WORKER_SPECS.length <= 6);
+
+  // Every worker has a distinct natural pose
+  const poses = new Set(INDUSTRIAL_WORKER_SPECS.map((w) => w.pose));
+  assert.equal(poses.size, INDUSTRIAL_WORKER_SPECS.length, 'Each worker should have a distinct natural pose');
+
+  // Workers must be widely distributed across the factory floor (minimum 6m apart)
+  for (let i = 0; i < INDUSTRIAL_WORKER_SPECS.length; i++) {
+    for (let j = i + 1; j < INDUSTRIAL_WORKER_SPECS.length; j++) {
+      const a = INDUSTRIAL_WORKER_SPECS[i];
+      const b = INDUSTRIAL_WORKER_SPECS[j];
+      const dist = Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z);
+      assert.ok(dist >= 6.0, `Workers ${a.id} and ${b.id} are too close (${dist.toFixed(1)}m)`);
+    }
+  }
+
+  INDUSTRIAL_WORKER_SPECS.forEach((worker) => {
+    // Must stay outside every machine's work cell safety perimeter (10.2m x 7.2m -> half 5.1m x 3.6m)
+    Object.values(MACHINE_COORDINATES).forEach((m) => {
+      const insideX = Math.abs(worker.position.x - m.x) < 5.1;
+      const insideZ = Math.abs(worker.position.z - m.z) < 3.6;
+      assert.equal(
+        insideX && insideZ,
+        false,
+        `Worker ${worker.id} should not overlap machine cell ${m.name}`
+      );
+    });
+
+    // Must stay clear of central General Compartment Box (2.7m x 1.0m footprint around (0, 0.75))
+    const dxG = Math.abs(worker.position.x - GATEWAY_COORDINATES.x);
+    const dzG = Math.abs(worker.position.z - GATEWAY_COORDINATES.z);
+    assert.equal(
+      dxG < 1.8 && dzG < 1.3,
+      false,
+      `Worker ${worker.id} should not block the General Compartment Box`
+    );
   });
 });
 

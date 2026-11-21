@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { 
   createRealisticFactoryFloorTexture, 
+  createFactoryFloorRoughnessTexture,
+  createWalkwayTexture,
+  createWorkCellPerimeterTexture,
   createIndustrialWallTexture, 
   createWoodPalletTexture,
   createCableTrayTexture 
@@ -11,6 +14,10 @@ export interface MaterialLibrary {
   factoryFloor: THREE.MeshPhysicalMaterial;
   factoryWall: THREE.MeshStandardMaterial;
   walkwayGreen: THREE.MeshStandardMaterial;
+  walkwayGreenCross: THREE.MeshStandardMaterial;
+  workCellPad: THREE.MeshStandardMaterial;
+  clerestoryGlass: THREE.MeshStandardMaterial;
+  compressedAirPipe: THREE.MeshStandardMaterial;
   safetyYellow: THREE.MeshStandardMaterial;
   controlRoomWall: THREE.MeshStandardMaterial;
   controlRoomGlass: THREE.MeshPhysicalMaterial;
@@ -135,27 +142,65 @@ export interface MaterialLibrary {
 }
 
 export function createMaterials(): MaterialLibrary {
-  // Realistic Concrete Floor with procedural noise, wear, and drain grates
+  // Realistic Sealed Industrial Concrete Floor with paired roughness variation & subtle epoxy sheen
   const floorMap = createRealisticFactoryFloorTexture();
+  const floorRoughnessMap = createFactoryFloorRoughnessTexture();
   const factoryFloor = new THREE.MeshPhysicalMaterial({
     map: floorMap,
-    roughness: 0.34,
-    metalness: 0.10,
-    clearcoat: 0.35,
-    clearcoatRoughness: 0.22,
+    roughnessMap: floorRoughnessMap,
+    roughness: 0.72,
+    metalness: 0.08,
+    clearcoat: 0.42,
+    clearcoatRoughness: 0.26,
+    envMapIntensity: 0.85,
   });
 
   const wallMap = createIndustrialWallTexture();
   const factoryWall = new THREE.MeshStandardMaterial({
     map: wallMap,
-    roughness: 0.65,
-    metalness: 0.35,
+    roughness: 0.72,
+    metalness: 0.26,
   });
 
   const walkwayGreen = new THREE.MeshStandardMaterial({
-    color: 0x15803d, // ISO 3864 safety green
-    roughness: 0.45,
-    metalness: 0.08,
+    map: createWalkwayTexture('vertical'),
+    roughness: 0.50,
+    metalness: 0.05,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+
+  const walkwayGreenCross = new THREE.MeshStandardMaterial({
+    map: createWalkwayTexture('horizontal'),
+    roughness: 0.50,
+    metalness: 0.05,
+    polygonOffset: true,
+    polygonOffsetFactor: -1.5,
+    polygonOffsetUnits: -1.5,
+  });
+
+  const workCellPad = new THREE.MeshStandardMaterial({
+    map: createWorkCellPerimeterTexture(),
+    roughness: 0.52,
+    metalness: 0.06,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+
+  const clerestoryGlass = new THREE.MeshStandardMaterial({
+    color: 0xe0f2fe,
+    emissive: 0xcbe8ff,
+    emissiveIntensity: 0.58,
+    roughness: 0.16,
+    metalness: 0.12,
+  });
+
+  const compressedAirPipe = new THREE.MeshStandardMaterial({
+    color: 0x0284c7, // ISO 14726 blue compressed-air header pipe
+    roughness: 0.34,
+    metalness: 0.62,
   });
 
   const safetyYellow = new THREE.MeshStandardMaterial({
@@ -858,6 +903,10 @@ export function createMaterials(): MaterialLibrary {
     factoryFloor,
     factoryWall,
     walkwayGreen,
+    walkwayGreenCross,
+    workCellPad,
+    clerestoryGlass,
+    compressedAirPipe,
     safetyYellow,
     controlRoomWall,
     controlRoomGlass,

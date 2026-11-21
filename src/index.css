@@ -16,10 +16,15 @@
     --color-normal-green: #2E8540;
   }
 
+  html,
   body {
     font-family: var(--font-sans);
     background-color: #050b14;
     color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
   }
 }
 
@@ -40,6 +45,7 @@
 
 .font-formal-mono {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Custom Scrollbar for Formal Panels */

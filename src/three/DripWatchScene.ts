@@ -7,7 +7,6 @@ import {
   createNodeBoxLabelTexture,
   createZoneLabelTexture,
   createLeakAlertBannerTexture,
-  createHazardStripesTexture,
   createRadialShadowTexture,
   createBlockLabelTexture,
   createMachineWarningLabelTexture,
@@ -42,6 +41,11 @@ import {
   GATEWAY_COORDINATES, 
   PAD_DISTANCES
 } from '../utils/iotLogic';
+import {
+  AnimatedIndustrialWorker,
+  buildIndustrialWorkers,
+  updateIndustrialWorkers
+} from './industrialWorkers';
 
 export const isSoftwareGl = (() => {
   if (typeof document === 'undefined') return true;
@@ -239,6 +243,10 @@ export class DripWatchScene {
   private arcBridgeMesh!: THREE.Mesh;
   private irBeamMesh!: THREE.Mesh;
 
+  // Industrial Shop Floor Workers
+  private workersGroup: THREE.Group = new THREE.Group();
+  private workers: AnimatedIndustrialWorker[] = [];
+
   constructor(
     container: HTMLElement, 
     initialQuality: RenderQuality = 'high'
@@ -253,10 +261,10 @@ export class DripWatchScene {
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
 
-    // 1. Scene & Environment: Crisp industrial atmosphere with extended visibility
+    // 1. Scene & Environment: Modern CNC facility architectural atmosphere
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a192f); // Deep industrial navy-slate environment
-    this.scene.fog = new THREE.Fog(0x0a192f, 50, 140);
+    this.scene.background = new THREE.Color(0x0f172a);
+    this.scene.fog = new THREE.Fog(0x0f172a, 58, 150);
 
     // 2. Camera: crisp perspective overlooking all machines cleanly
     this.camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 150);
@@ -273,7 +281,7 @@ export class DripWatchScene {
     this.renderer.setSize(width, height);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.shadowMap.enabled = !isSoftwareGl;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -289,9 +297,10 @@ export class DripWatchScene {
     this.controls.target.set(0, 1.2, 0);
     this.controls.update();
 
-    // 5. Studio Environment map for realistic reflections
+    // 5. Studio Environment map for realistic reflections on steel, chrome & epoxy concrete
     const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.85;
     pmremGenerator.dispose();
 
     // 6. Materials
@@ -305,7 +314,11 @@ export class DripWatchScene {
     this.buildAllFourMachines();
     this.buildWirelessLinks();
     this.buildInsideSensorCutaway();
+    const builtWorkers = buildIndustrialWorkers(!isSoftwareGl);
+    this.workersGroup = builtWorkers.group;
+    this.workers = builtWorkers.workers;
 
+    this.scene.add(this.workersGroup);
     this.scene.add(this.dropletGroup);
     this.scene.add(this.splashGroup);
     this.scene.add(this.rippleGroup);
@@ -366,14 +379,14 @@ export class DripWatchScene {
   }
 
   private setupLighting() {
-    // 1. Crisp, balanced ambient shop floor lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x22334a, 1.85);
+    // 1. Natural modern CNC facility ambient skylight + cool-slate floor bounce
+    const hemiLight = new THREE.HemisphereLight(0xeef6ff, 0x243447, 1.25);
     hemiLight.position.set(0, 32, 0);
     this.scene.add(hemiLight);
 
-    // 2. High directional key light casting clean industrial shadows and highlighting machines
-    this.keyLight = new THREE.DirectionalLight(0xfff8ee, 2.8);
-    this.keyLight.position.set(14, 30, 18);
+    // 2. Primary directional key light casting crisp, natural industrial shadows
+    this.keyLight = new THREE.DirectionalLight(0xfff7ed, 2.35);
+    this.keyLight.position.set(14, 28, 16);
     this.keyLight.castShadow = !isSoftwareGl;
     if (this.keyLight.castShadow) {
       this.keyLight.shadow.mapSize.width = 2048;
@@ -384,18 +397,20 @@ export class DripWatchScene {
       this.keyLight.shadow.camera.right = 26;
       this.keyLight.shadow.camera.top = 26;
       this.keyLight.shadow.camera.bottom = -26;
-      this.keyLight.shadow.bias = -0.0003;
+      this.keyLight.shadow.bias = -0.00035;
+      this.keyLight.shadow.normalBias = 0.025;
+      this.keyLight.shadow.radius = 2.5;
     }
     this.scene.add(this.keyLight);
 
-    // 3. Clear cool fill light from north wall ensuring no dark machine faces
-    const fillLight = new THREE.DirectionalLight(0xbae6fd, 1.6);
-    fillLight.position.set(-18, 20, -18);
+    // 3. Cool architectural clerestory fill from north-west for realistic metallic depth
+    const fillLight = new THREE.DirectionalLight(0xa5d8ff, 0.95);
+    fillLight.position.set(-18, 18, -14);
     this.scene.add(fillLight);
 
-    // 4. Front soft light from camera side so words, labels, and machine fronts are vibrantly illuminated
-    const frontLight = new THREE.DirectionalLight(0xffffff, 1.45);
-    frontLight.position.set(0, 18, 24);
+    // 4. Gentle front workshop bounce light keeping machine faces and trays clearly visible
+    const frontLight = new THREE.DirectionalLight(0xf8fafc, 0.85);
+    frontLight.position.set(0, 15, 22);
     this.scene.add(frontLight);
   }
 
@@ -405,7 +420,7 @@ export class DripWatchScene {
   }
 
   private buildShopFloor() {
-    // 1. Concrete factory floor plane with aggregate noise and drain grates
+    // 1. Sealed industrial concrete floor plane with roughness variation & drain grates
     const floorGeo = new THREE.PlaneGeometry(52, 44);
     const floorMesh = new THREE.Mesh(floorGeo, this.materials.factoryFloor);
     floorMesh.rotation.x = -Math.PI / 2;
@@ -413,7 +428,7 @@ export class DripWatchScene {
     floorMesh.receiveShadow = !isSoftwareGl;
     this.scene.add(floorMesh);
 
-    // 2. Main Central Pedestrian Walkway (Green safety aisle with yellow border)
+    // 2. Main Central Pedestrian Walkway (Textured safety-green epoxy aisle with painted yellow edge stripes)
     const aisleGeo = new THREE.PlaneGeometry(4.0, 42);
     const aisleMesh = new THREE.Mesh(aisleGeo, this.materials.walkwayGreen);
     aisleMesh.rotation.x = -Math.PI / 2;
@@ -423,19 +438,13 @@ export class DripWatchScene {
 
     // Cross Walkway connecting east & west cells
     const crossAisleGeo = new THREE.PlaneGeometry(48, 3.6);
-    const crossAisleMesh = new THREE.Mesh(crossAisleGeo, this.materials.walkwayGreen);
+    const crossAisleMesh = new THREE.Mesh(crossAisleGeo, this.materials.walkwayGreenCross);
     crossAisleMesh.rotation.x = -Math.PI / 2;
-    crossAisleMesh.position.set(0, 0.015, 0.8);
+    crossAisleMesh.position.set(0, 0.014, 0.8);
     crossAisleMesh.receiveShadow = !isSoftwareGl;
     this.scene.add(crossAisleMesh);
 
-    // Safety warning hazard stripes around work cell perimeters
-    const stripeMat = new THREE.MeshBasicMaterial({
-      map: createHazardStripesTexture(),
-      transparent: true,
-      opacity: 0.85
-    });
-
+    // 3. Realistic dark slate CNC work-cell epoxy pads with crisp OSHA perimeter hazard border
     const cellPositions = [
       { x: -7.5, z: -4.0 },
       { x: 7.5, z: -4.0 },
@@ -443,37 +452,40 @@ export class DripWatchScene {
       { x: 7.5, z: 5.5 },
     ];
 
+    const sharedRadialShadowMat = new THREE.MeshBasicMaterial({
+      map: createRadialShadowTexture(),
+      transparent: true,
+      opacity: 0.58,
+      depthWrite: false
+    });
+
     cellPositions.forEach(pos => {
-      // Work cell safety border
+      // Work cell anti-slip epoxy pad with crisp perimeter hazard stripes
       const borderGeo = new THREE.PlaneGeometry(10.2, 7.2);
-      const borderMesh = new THREE.Mesh(borderGeo, stripeMat);
+      const borderMesh = new THREE.Mesh(borderGeo, this.materials.workCellPad);
       borderMesh.rotation.x = -Math.PI / 2;
       borderMesh.position.set(pos.x, 0.018, pos.z);
+      borderMesh.receiveShadow = !isSoftwareGl;
       this.scene.add(borderMesh);
 
-      // Contact shadow beneath machine
-      const shadowGeo = new THREE.PlaneGeometry(9.4, 6.4);
-      const shadowMat = new THREE.MeshBasicMaterial({
-        map: createRadialShadowTexture(),
-        transparent: true,
-        opacity: 0.65,
-        depthWrite: false
-      });
-      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      // Soft contact shadow beneath machine footprint
+      const shadowGeo = new THREE.PlaneGeometry(9.2, 6.2);
+      const shadow = new THREE.Mesh(shadowGeo, sharedRadialShadowMat);
       shadow.rotation.x = -Math.PI / 2;
-      shadow.position.set(pos.x, 0.02, pos.z);
+      shadow.position.set(pos.x, 0.022, pos.z);
       this.scene.add(shadow);
     });
   }
 
   private buildShopEnvironment() {
     // =========================================================================
-    // ULTRA-REALISTIC INDUSTRIAL MACHINING WORKSHOP ENVIRONMENT
-    // North wall, West wall, East wall, high ceiling trusses, overhead high-bay
-    // LED lamps, cable trays, conduits, and perimeter background equipment.
+    // MODERN CNC MANUFACTURING WORKSHOP ARCHITECTURE (PERIMETER & STRUCTURE)
+    // Precast wainscoting & ribbed metal walls, structural H-beam columns with
+    // baseplates, clerestory daylight windows, high steel roof trusses & crane
+    // runway rails (no hanging ceiling lamps), utility headers, and shop props.
     // =========================================================================
 
-    // 1. North Factory Back Wall (Clad industrial wall panels)
+    // 1. North Factory Back Wall (Modern precast concrete + ribbed architectural steel cladding)
     const northWallGeo = new THREE.BoxGeometry(52, 12, 0.6);
     const northWallMesh = new THREE.Mesh(northWallGeo, this.materials.factoryWall);
     northWallMesh.position.set(0, 6.0, -17.5);
@@ -494,39 +506,138 @@ export class DripWatchScene {
     eastWallMesh.receiveShadow = !isSoftwareGl;
     this.scene.add(eastWallMesh);
 
-    // 4. Wall Dado Line (Dark painted baseboard along the bottom of all walls)
-    const dadoMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 });
-    const northDado = new THREE.Mesh(new THREE.BoxGeometry(52, 0.7, 0.65), dadoMat);
-    northDado.position.set(0, 0.35, -17.48);
+    // 4. Wall Dado Plinth (Concrete floor curb along the base of all perimeter walls)
+    const dadoMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.62, metalness: 0.18 });
+    const northDado = new THREE.Mesh(new THREE.BoxGeometry(52, 0.55, 0.72), dadoMat);
+    northDado.position.set(0, 0.275, -17.44);
+    northDado.receiveShadow = !isSoftwareGl;
     this.scene.add(northDado);
 
-    const westDado = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.7, 44), dadoMat);
-    westDado.position.set(-25.98, 0.35, 0);
+    const westDado = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.55, 44), dadoMat);
+    westDado.position.set(-25.94, 0.275, 0);
+    westDado.receiveShadow = !isSoftwareGl;
     this.scene.add(westDado);
 
-    const eastDado = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.7, 44), dadoMat);
-    eastDado.position.set(25.98, 0.35, 0);
+    const eastDado = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.55, 44), dadoMat);
+    eastDado.position.set(25.94, 0.275, 0);
+    eastDado.receiveShadow = !isSoftwareGl;
     this.scene.add(eastDado);
 
-    // 5. Structural Steel I-Beam Columns along the walls
-    const columnGeo = new THREE.BoxGeometry(0.5, 12, 0.5);
-    const colPositions = [
-      { x: -20, z: -17.2 },
-      { x: -10, z: -17.2 },
-      { x: 0, z: -17.2 },
-      { x: 10, z: -17.2 },
-      { x: 20, z: -17.2 },
-      { x: -25.7, z: -10 },
-      { x: -25.7, z: 0 },
-      { x: -25.7, z: 10 },
-      { x: 25.7, z: -10 },
-      { x: 25.7, z: 0 },
-      { x: 25.7, z: 10 },
+    // 5. Structural Steel H-Beam Columns with Bolted Baseplates & Safety Lower Collars
+    const colPositions: Array<{ x: number; z: number; rotateY: number }> = [
+      { x: -20, z: -17.05, rotateY: 0 },
+      { x: -10, z: -17.05, rotateY: 0 },
+      { x: 0, z: -17.05, rotateY: 0 },
+      { x: 10, z: -17.05, rotateY: 0 },
+      { x: 20, z: -17.05, rotateY: 0 },
+      { x: -25.55, z: -10, rotateY: Math.PI / 2 },
+      { x: -25.55, z: 0, rotateY: Math.PI / 2 },
+      { x: -25.55, z: 10, rotateY: Math.PI / 2 },
+      { x: 25.55, z: -10, rotateY: Math.PI / 2 },
+      { x: 25.55, z: 0, rotateY: Math.PI / 2 },
+      { x: 25.55, z: 10, rotateY: Math.PI / 2 },
     ];
+    const flangeGeo = new THREE.BoxGeometry(0.54, 12.0, 0.08);
+    const webGeo = new THREE.BoxGeometry(0.10, 12.0, 0.42);
+    const basePlateGeo = new THREE.BoxGeometry(0.84, 0.08, 0.78);
+    const bumperGeo = new THREE.BoxGeometry(0.62, 0.92, 0.60);
+
     colPositions.forEach(cp => {
-      const col = new THREE.Mesh(columnGeo, this.materials.trussSteel);
-      col.position.set(cp.x, 6.0, cp.z);
-      this.scene.add(col);
+      const colGroup = new THREE.Group();
+      colGroup.position.set(cp.x, 0, cp.z);
+      colGroup.rotation.y = cp.rotateY;
+
+      const frontFlange = new THREE.Mesh(flangeGeo, this.materials.trussSteel);
+      frontFlange.position.set(0, 6.0, 0.21);
+      frontFlange.castShadow = !isSoftwareGl;
+      colGroup.add(frontFlange);
+
+      const backFlange = new THREE.Mesh(flangeGeo, this.materials.trussSteel);
+      backFlange.position.set(0, 6.0, -0.21);
+      colGroup.add(backFlange);
+
+      const web = new THREE.Mesh(webGeo, this.materials.trussSteel);
+      web.position.set(0, 6.0, 0);
+      colGroup.add(web);
+
+      const basePlate = new THREE.Mesh(basePlateGeo, this.materials.m1Graphite);
+      basePlate.position.set(0, 0.04, 0);
+      basePlate.receiveShadow = !isSoftwareGl;
+      colGroup.add(basePlate);
+
+      // Protective safety-yellow lower column guard collar
+      const bumper = new THREE.Mesh(bumperGeo, this.materials.safetyYellow);
+      bumper.position.set(0, 0.50, 0);
+      colGroup.add(bumper);
+
+      this.scene.add(colGroup);
+    });
+
+    // 5b. High Architectural Clerestory Daylight Windows along Upper Perimeter Walls (y = 9.6m)
+    const mullionMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, metalness: 0.65 });
+    const northWindowXs = [-15, -5, 5, 15];
+    northWindowXs.forEach(wx => {
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(7.2, 1.75, 0.14), mullionMat);
+      frame.position.set(wx, 9.75, -17.18);
+      this.scene.add(frame);
+
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(6.85, 1.45), this.materials.clerestoryGlass);
+      glass.position.set(wx, 9.75, -17.10);
+      this.scene.add(glass);
+
+      // Vertical aluminum mullions
+      [-2.25, 0, 2.25].forEach(mx => {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.55, 0.16), mullionMat);
+        bar.position.set(wx + mx, 9.75, -17.12);
+        this.scene.add(bar);
+      });
+    });
+
+    // Side-wall clerestory windows on West and East upper walls
+    [-12, -3, 6].forEach(wz => {
+      [-1, 1].forEach(side => {
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.75, 6.4), mullionMat);
+        frame.position.set(side * 25.68, 9.75, wz);
+        this.scene.add(frame);
+
+        const glass = new THREE.Mesh(new THREE.PlaneGeometry(6.05, 1.45), this.materials.clerestoryGlass);
+        glass.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2;
+        glass.position.set(side * 25.60, 9.75, wz);
+        this.scene.add(glass);
+      });
+    });
+
+    // 5c. Overhead Structural Steel Perimeter Girders, Roof Trusses & Crane Runway Rails (NO hanging lamps)
+    const northGirder = new THREE.Mesh(new THREE.BoxGeometry(52, 0.45, 0.42), this.materials.trussSteel);
+    northGirder.position.set(0, 11.75, -17.1);
+    this.scene.add(northGirder);
+
+    [-25.55, 25.55].forEach(sx => {
+      const sideGirder = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.45, 44), this.materials.trussSteel);
+      sideGirder.position.set(sx, 11.75, 0);
+      this.scene.add(sideGirder);
+
+      // Industrial yellow overhead bridge-crane runway rail along East & West walls
+      const runwayRail = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.55, 40), this.materials.craneBeam);
+      runwayRail.position.set(sx + (sx < 0 ? 0.48 : -0.48), 8.2, 0);
+      this.scene.add(runwayRail);
+    });
+
+    // High architectural steel roof trusses (structural framing only, cleanly above scene)
+    [-14.5, -5.0, 4.5].forEach(tz => {
+      const topChord = new THREE.Mesh(new THREE.BoxGeometry(51.4, 0.24, 0.24), this.materials.trussSteel);
+      topChord.position.set(0, 11.88, tz);
+      this.scene.add(topChord);
+
+      const bottomChord = new THREE.Mesh(new THREE.BoxGeometry(51.4, 0.18, 0.18), this.materials.trussSteel);
+      bottomChord.position.set(0, 11.15, tz);
+      this.scene.add(bottomChord);
+
+      for (let x = -22; x <= 22; x += 4.4) {
+        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.72, 0.10), this.materials.trussSteel);
+        strut.position.set(x, 11.52, tz);
+        this.scene.add(strut);
+      }
     });
 
     // 6. Perforated Galvanized Cable Trays along walls
@@ -544,7 +655,7 @@ export class DripWatchScene {
     cableTrayEast.position.set(25.65, 4.4, 0);
     this.scene.add(cableTrayEast);
 
-    // 10. Galvanized Electrical EMT Conduit Lines
+    // 10. Galvanized Electrical EMT Conduit Lines & ISO Blue Compressed-Air Distribution Header
     const conduitGeo = new THREE.CylinderGeometry(0.045, 0.045, 48, 8);
     conduitGeo.rotateZ(Math.PI / 2);
     const conduit1 = new THREE.Mesh(conduitGeo, this.materials.conduitElectric);
@@ -555,6 +666,35 @@ export class DripWatchScene {
     conduit2.position.set(0, 3.4, -17.15);
     this.scene.add(conduit2);
 
+    const airHeaderGeo = new THREE.CylinderGeometry(0.055, 0.055, 48, 10);
+    airHeaderGeo.rotateZ(Math.PI / 2);
+    const airHeader = new THREE.Mesh(airHeaderGeo, this.materials.compressedAirPipe);
+    airHeader.position.set(0, 3.72, -17.14);
+    this.scene.add(airHeader);
+
+    // Perimeter CNC Main Electrical Disconnect Panel along North Wall (-5.8, 0, -17.0)
+    const panelBody = new THREE.Mesh(new THREE.BoxGeometry(1.45, 2.1, 0.42), this.materials.storageCabinet);
+    panelBody.position.set(-5.8, 1.45, -17.0);
+    panelBody.castShadow = !isSoftwareGl;
+    this.scene.add(panelBody);
+
+    const panelHandle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.08), this.materials.fireExtinguisher);
+    panelHandle.position.set(-5.24, 1.65, -16.76);
+    this.scene.add(panelHandle);
+
+    // Subtle safety bollards framing the northern walkway entrance at North Wall
+    const bollardGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.0, 12);
+    [-2.2, 2.2].forEach(bx => {
+      const bollard = new THREE.Mesh(bollardGeo, this.materials.safetyYellow);
+      bollard.position.set(bx, 0.5, -16.4);
+      bollard.castShadow = !isSoftwareGl;
+      this.scene.add(bollard);
+
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.082, 0.12, 12), this.materials.m1Graphite);
+      cap.position.set(bx, 0.96, -16.4);
+      this.scene.add(cap);
+    });
+
     // 11. Wall Ventilation Louvers on North Wall
     const ventGeo = new THREE.PlaneGeometry(2.8, 2.8);
     const ventMat = new THREE.MeshStandardMaterial({
@@ -564,27 +704,35 @@ export class DripWatchScene {
     });
     [-18.0, 18.0].forEach(vx => {
       const vent = new THREE.Mesh(ventGeo, ventMat);
-      vent.position.set(vx, 7.5, -17.18);
+      vent.position.set(vx, 7.2, -17.18);
       this.scene.add(vent);
     });
 
-    // 12. Safety Signs on North Wall
+    // 12. Safety Signs on North Wall (ultra-crisp, non-tone-mapped, polygonOffset prevents shimmer)
     const signGeo = new THREE.PlaneGeometry(1.8, 1.8);
-    const eyeSign = new THREE.Mesh(signGeo, new THREE.MeshBasicMaterial({ map: createSafetySignTexture('eye_protection') }));
-    eyeSign.position.set(-11, 4.4, -17.16);
+    const makeSignMat = (type: 'eye_protection' | 'fire_extinguisher' | 'spill_response') =>
+      new THREE.MeshBasicMaterial({
+        map: createSafetySignTexture(type),
+        toneMapped: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+    const eyeSign = new THREE.Mesh(signGeo, makeSignMat('eye_protection'));
+    eyeSign.position.set(-13.5, 4.4, -17.16);
     this.scene.add(eyeSign);
 
-    const spillSign = new THREE.Mesh(signGeo, new THREE.MeshBasicMaterial({ map: createSafetySignTexture('spill_response') }));
-    spillSign.position.set(0, 4.0, -17.16);
+    const spillSign = new THREE.Mesh(signGeo, makeSignMat('spill_response'));
+    spillSign.position.set(4.5, 4.4, -17.16);
     this.scene.add(spillSign);
 
-    const fireSign = new THREE.Mesh(signGeo, new THREE.MeshBasicMaterial({ map: createSafetySignTexture('fire_extinguisher') }));
-    fireSign.position.set(12, 4.4, -17.16);
+    const fireSign = new THREE.Mesh(signGeo, makeSignMat('fire_extinguisher'));
+    fireSign.position.set(13.5, 4.4, -17.16);
     this.scene.add(fireSign);
 
     // 13. Wall-Mounted Fire Extinguisher (under fire sign)
     const extGroup = new THREE.Group();
-    extGroup.position.set(12, 2.0, -17.0);
+    extGroup.position.set(13.5, 2.0, -17.0);
 
     const tankGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.9, 16);
     const tankMesh = new THREE.Mesh(tankGeo, this.materials.fireExtinguisher);
@@ -726,7 +874,11 @@ export class DripWatchScene {
     const screenGeo = new THREE.PlaneGeometry(2.26, 1.36);
     const screenMat = new THREE.MeshBasicMaterial({
       map: createGeneralCompartmentTexture([]),
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     });
     this.compartmentScreenMesh = new THREE.Mesh(screenGeo, screenMat);
     this.compartmentScreenMesh.position.set(gCoords.x, 2.05, gCoords.z + 0.44);
@@ -837,7 +989,8 @@ export class DripWatchScene {
       map: createZoneLabelTexture(`${id.toUpperCase()}`, 'Collection Tray', false),
       transparent: true,
       depthTest: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     });
     const labelBasin = new THREE.Mesh(badgeGeo, matBasin);
     labelBasin.position.set(0, 0.09, TRAY_Z + trayD / 2 + 0.36);
@@ -931,7 +1084,8 @@ export class DripWatchScene {
     const oilTag = new THREE.Mesh(tagGeo, new THREE.MeshBasicMaterial({
       map: createElectrodeTagTexture('oil'),
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     }));
     oilTag.position.set(-0.62, 1.14, 0.05);
     oilTag.renderOrder = 20;
@@ -940,7 +1094,8 @@ export class DripWatchScene {
     const oilBadge = new THREE.Mesh(badgeAlertGeo, new THREE.MeshBasicMaterial({
       map: createElectrodeActiveBadgeTexture('oil'),
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     }));
     oilBadge.position.set(-0.62, 1.44, 0.06);
     oilBadge.renderOrder = 25;
@@ -976,7 +1131,8 @@ export class DripWatchScene {
     const coolantTag = new THREE.Mesh(tagGeo, new THREE.MeshBasicMaterial({
       map: createElectrodeTagTexture('coolant'),
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     }));
     coolantTag.position.set(0.62, 1.14, 0.05);
     coolantTag.renderOrder = 20;
@@ -985,7 +1141,8 @@ export class DripWatchScene {
     const coolantBadge = new THREE.Mesh(badgeAlertGeo, new THREE.MeshBasicMaterial({
       map: createElectrodeActiveBadgeTexture('coolant'),
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     }));
     coolantBadge.position.set(0.62, 1.44, 0.06);
     coolantBadge.renderOrder = 25;
@@ -1231,7 +1388,16 @@ export class DripWatchScene {
       group.add(pendant);
       chassisMeshes.push(pendant);
 
-      const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.28), new THREE.MeshBasicMaterial({ map: createCncScreenTexture() }));
+      const screenMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.42, 0.28),
+        new THREE.MeshBasicMaterial({
+          map: createCncScreenTexture(),
+          toneMapped: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1
+        })
+      );
       screenMesh.position.set(2.05, 2.4, BODY_Z + 0.91);
       screenMesh.rotation.y = -0.25;
       group.add(screenMesh);
@@ -1360,7 +1526,8 @@ export class DripWatchScene {
       map: createMachineNameBoardTexture(id.toUpperCase(), cfg.name.split(' ').slice(1).join(' '), fluidStr, false),
       transparent: true,
       depthTest: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     });
     const boardHeight = id === 'm1' ? 5.85 : id === 'm2' ? 4.95 : 3.85;
     nameBoardMesh = new THREE.Mesh(boardGeo, boardMat);
@@ -1409,7 +1576,11 @@ export class DripWatchScene {
     const nLabelGeo = new THREE.PlaneGeometry(0.98, 0.62);
     const nLabelMat = new THREE.MeshBasicMaterial({
       map: createNodeBoxLabelTexture(`Node ${id.toUpperCase()}`, 'NORMAL', null),
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     });
     const nodeLabelMesh = new THREE.Mesh(nLabelGeo, nLabelMat);
     nodeLabelMesh.position.set(0, 0.14, 0.255);
@@ -1476,7 +1647,7 @@ export class DripWatchScene {
     blockLabels.forEach(b => {
       const bMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(0.54, 0.10),
-        new THREE.MeshBasicMaterial({ map: createBlockLabelTexture(b.name, b.sub, '#1FA5A0'), transparent: true })
+        new THREE.MeshBasicMaterial({ map: createBlockLabelTexture(b.name, b.sub, '#1FA5A0'), transparent: true, toneMapped: false })
       );
       bMesh.position.set(0, b.y, 0.03);
       nodePcbGroup.add(bMesh);
@@ -1491,7 +1662,8 @@ export class DripWatchScene {
     const alertBannerMat = new THREE.MeshBasicMaterial({
       map: createLeakAlertBannerTexture(`${id.toUpperCase()}-Z1`, 'Coolant'),
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      toneMapped: false
     });
     const alertBanner = new THREE.Mesh(alertBannerGeo, alertBannerMat);
     alertBanner.position.set(0, 6.5, BODY_Z + 0.3);
@@ -2303,6 +2475,7 @@ export class DripWatchScene {
       this.updateDroplets(delta);
       this.updateSplashes(delta);
       this.updateRipples(delta);
+      updateIndustrialWorkers(this.workers, this.elapsedTime);
 
       // Animate pad pulses
       (['m1', 'm2', 'm3', 'm4'] as MachineId[]).forEach(id => {
@@ -2359,7 +2532,8 @@ export class DripWatchScene {
           Number.isFinite(this.targetControlsTarget.y) &&
           Number.isFinite(this.targetControlsTarget.z)
         ) {
-          const camAlpha = 1 - Math.exp(-delta * 10.5);
+          const camDamping = this.activeDemoStep !== null ? 2.4 : 10.5;
+          const camAlpha = 1 - Math.exp(-delta * camDamping);
           this.camera.position.lerp(this.targetCameraPos, camAlpha);
           this.controls.target.lerp(this.targetControlsTarget, camAlpha);
           this.camera.position.y = Math.max(this.camera.position.y, 1.35);
